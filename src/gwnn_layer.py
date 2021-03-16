@@ -3,6 +3,7 @@
 import torch
 from torch_sparse import spspmm, spmm
 
+
 class GraphWaveletLayer(torch.nn.Module):
     """
     Abstract Graph Wavelet Layer class.
@@ -24,12 +25,16 @@ class GraphWaveletLayer(torch.nn.Module):
         """
         Defining diagonal filter matrix (Theta in the paper) and weight matrix.
         """
-        self.weight_matrix = torch.nn.Parameter(torch.Tensor(self.in_channels, self.out_channels))
-        self.diagonal_weight_indices = torch.LongTensor([[node for node in range(self.ncount)],
-                                                         [node for node in range(self.ncount)]])
+        self.weight_matrix = torch.nn.Parameter(
+            torch.Tensor(self.in_channels, self.out_channels))
+        self.diagonal_weight_indices = torch.LongTensor(
+            [[node for node in range(self.ncount)],
+             [node for node in range(self.ncount)]])
 
-        self.diagonal_weight_indices = self.diagonal_weight_indices.to(self.device)
-        self.diagonal_weight_filter = torch.nn.Parameter(torch.Tensor(self.ncount, 1))
+        self.diagonal_weight_indices = self.diagonal_weight_indices.to(
+            self.device)
+        self.diagonal_weight_filter = torch.nn.Parameter(
+            torch.Tensor(self.ncount, 1))
 
     def init_parameters(self):
         """
@@ -37,6 +42,7 @@ class GraphWaveletLayer(torch.nn.Module):
         """
         torch.nn.init.uniform_(self.diagonal_weight_filter, 0.9, 1.1)
         torch.nn.init.xavier_uniform_(self.weight_matrix)
+
 
 class SparseGraphWaveletLayer(GraphWaveletLayer):
     """
@@ -55,44 +61,34 @@ class SparseGraphWaveletLayer(GraphWaveletLayer):
         :param dropout: Dropout rate.
         :return dropout_features: Filtered feature matrix extracted.
         """
-        rescaled_phi_indices, rescaled_phi_values = spspmm(phi_indices,
-                                                           phi_values,
-                                                           self.diagonal_weight_indices,
-                                                           self.diagonal_weight_filter.view(-1),
-                                                           self.ncount,
-                                                           self.ncount,
-                                                           self.ncount)
+        rescaled_phi_indices, rescaled_phi_values = spspmm(
+            phi_indices, phi_values, self.diagonal_weight_indices,
+            self.diagonal_weight_filter.view(-1), self.ncount, self.ncount,
+            self.ncount)
 
-        phi_product_indices, phi_product_values = spspmm(rescaled_phi_indices,
-                                                         rescaled_phi_values,
-                                                         phi_inverse_indices,
-                                                         phi_inverse_values,
-                                                         self.ncount,
-                                                         self.ncount,
-                                                         self.ncount)
+        phi_product_indices, phi_product_values = spspmm(
+            rescaled_phi_indices, rescaled_phi_values, phi_inverse_indices,
+            phi_inverse_values, self.ncount, self.ncount, self.ncount)
 
-        filtered_features = spmm(feature_indices,
-                                 feature_values,
-                                 self.ncount,
-                                 self.in_channels,
-                                 self.weight_matrix)
+        filtered_features = spmm(feature_indices, feature_values, self.ncount,
+                                 self.in_channels, self.weight_matrix)
 
-        localized_features = spmm(phi_product_indices,
-                                  phi_product_values,
-                                  self.ncount,
-                                  self.ncount,
-                                  filtered_features)
+        localized_features = spmm(phi_product_indices, phi_product_values,
+                                  self.ncount, self.ncount, filtered_features)
 
-        dropout_features = torch.nn.functional.dropout(torch.nn.functional.relu(localized_features),
-                                                       training=self.training,
-                                                       p=dropout)
+        dropout_features = torch.nn.functional.dropout(
+            torch.nn.functional.relu(localized_features),
+            training=self.training,
+            p=dropout)
         return dropout_features
+
 
 class DenseGraphWaveletLayer(GraphWaveletLayer):
     """
     Dense Graph Wavelet Layer Class.
     """
-    def forward(self, phi_indices, phi_values, phi_inverse_indices, phi_inverse_values, features):
+    def forward(self, phi_indices, phi_values, phi_inverse_indices,
+                phi_inverse_values, features):
         """
         Forward propagation pass.
         :param phi_indices: Sparse wavelet matrix index pairs.
@@ -102,28 +98,18 @@ class DenseGraphWaveletLayer(GraphWaveletLayer):
         :param features: Feature matrix.
         :return localized_features: Filtered feature matrix extracted.
         """
-        rescaled_phi_indices, rescaled_phi_values = spspmm(phi_indices,
-                                                           phi_values,
-                                                           self.diagonal_weight_indices,
-                                                           self.diagonal_weight_filter.view(-1),
-                                                           self.ncount,
-                                                           self.ncount,
-                                                           self.ncount)
+        rescaled_phi_indices, rescaled_phi_values = spspmm(
+            phi_indices, phi_values, self.diagonal_weight_indices,
+            self.diagonal_weight_filter.view(-1), self.ncount, self.ncount,
+            self.ncount)
 
-        phi_product_indices, phi_product_values = spspmm(rescaled_phi_indices,
-                                                         rescaled_phi_values,
-                                                         phi_inverse_indices,
-                                                         phi_inverse_values,
-                                                         self.ncount,
-                                                         self.ncount,
-                                                         self.ncount)
+        phi_product_indices, phi_product_values = spspmm(
+            rescaled_phi_indices, rescaled_phi_values, phi_inverse_indices,
+            phi_inverse_values, self.ncount, self.ncount, self.ncount)
 
         filtered_features = torch.mm(features, self.weight_matrix)
 
-        localized_features = spmm(phi_product_indices,
-                                  phi_product_values,
-                                  self.ncount,
-                                  self.ncount,
-                                  filtered_features)
+        localized_features = spmm(phi_product_indices, phi_product_values,
+                                  self.ncount, self.ncount, filtered_features)
 
         return localized_features
